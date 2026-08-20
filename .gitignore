@@ -1,0 +1,25 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock  # binaire final : à re-décommenter si on veut le figer
+
+# Node / site build
+node_modules/
+dist/
+.vite/
+
+# Secrets & état d'affaires — NE JAMAIS COMMIT
+.env
+.env.*
+*.creds
+*.secret
+cases/            # état persisté des affaires (peut contenir des identifiants de clé)
+secrets/
+
+# Données locales MinIO
+.minio-data/
+minio-data/
+
+# Divers
+.DS_Store
+*.log

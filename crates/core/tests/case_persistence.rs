@@ -8,16 +8,15 @@ fn save_then_load_roundtrip() {
 
     let c = Case {
         id: "acme-2026".into(),
-        data_bucket: "intake-data-acme-2026-abcd".into(),
-        site_bucket: "intake-site-acme-2026-abcd".into(),
+        bucket: "intake-acme-2026-abcd".into(),
         scoped_access_key: "AKIAEXAMPLE".into(),
-        site_url: "http://localhost:9000/intake-site-acme-2026-abcd/site/index.html".into(),
+        site_url: "http://localhost:9000/intake-acme-2026-abcd/site/index.html".into(),
         state: CaseState::Active,
     };
     c.save(&dir_s).unwrap();
 
     let loaded = Case::load(&dir_s, "acme-2026").unwrap();
-    assert_eq!(loaded.data_bucket, c.data_bucket);
+    assert_eq!(loaded.bucket, c.bucket);
     assert_eq!(loaded.scoped_access_key, "AKIAEXAMPLE");
     assert!(matches!(loaded.state, CaseState::Active));
 }

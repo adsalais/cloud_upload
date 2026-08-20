@@ -64,16 +64,20 @@ A Cargo workspace plus a dependency-free static site.
   be a second binary over the same `core`.
 - `site/` — the victim-facing upload page, **zero dependencies, no build step**:
   `sigv4.js` (AWS SigV4 via Web Crypto), `upload.js` (resumable multipart over `fetch`),
-  `index.html`. `create_case` deploys these into the per-case public site bucket, plus a
-  per-case `config.json` (endpoint / region / dataBucket).
+  `index.html`. `create_case` deploys these under `site/` in the per-case bucket, plus a
+  per-case `site/config.json` (endpoint / region / dataBucket). Uploads land under
+  `data/`.
 
 ### Security model (why it's shaped this way)
 
-Two buckets per case: a **private data bucket** (versioning on; the scoped key may only
-`PutObject` + multipart, never Get/List/Delete or touch another bucket) and a **public
-site bucket**. Scaleway/OVH offer no STS, so the scoped key is long-lived and destroyed
-at teardown; its blast radius is one throwaway bucket. `crates/core/tests/scoped_key.rs`
-asserts the negative permissions — keep it green.
+**One bucket per case with prefix isolation** (constants `SITE_PREFIX`/`DATA_PREFIX` in
+`ops.rs`): public read is granted on `site/*` **only**; the uploaded evidence under
+`data/*` stays private. The victim's scoped key may only `PutObject` + multipart under
+`data/*` — never Get/List, never `site/*` (so a leaked key can't overwrite the served JS
+to attack the next victim). Versioning is on. Scaleway/OVH offer no STS, so the scoped
+key is long-lived and destroyed at teardown; its blast radius is one throwaway bucket.
+`crates/core/tests/scoped_key.rs` asserts these negatives and
+`site_and_objects.rs` asserts `site/` public + `data/` private (403) — keep them green.
 
 ### Gotchas
 

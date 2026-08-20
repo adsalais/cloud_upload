@@ -4,6 +4,10 @@ use crate::minio_iam::MinioIam;
 use crate::s3_dataplane::{build_client, S3DataPlane};
 use std::path::{Path, PathBuf};
 
+/// Préfixes au sein du bucket unique de l'affaire.
+pub const SITE_PREFIX: &str = "site/";
+pub const DATA_PREFIX: &str = "data/";
+
 pub struct CreateResult {
     pub case: Case,
     pub scoped_secret_key: String,
@@ -28,50 +32,47 @@ fn admin_dp(cfg: &Config) -> S3DataPlane {
 pub async fn create_case(cfg: &Config, id: &str) -> anyhow::Result<CreateResult> {
     let s = slug(id);
     let suffix = rand_suffix();
-    let data_bucket = format!("intake-data-{s}-{suffix}");
-    let site_bucket = format!("intake-site-{s}-{suffix}");
+    let bucket = format!("intake-{s}-{suffix}");
     let dp = admin_dp(cfg);
 
-    // bucket data : privé + versioning + CORS (belt-and-suspenders pour la prod)
-    dp.create_bucket(&data_bucket).await?;
-    dp.enable_versioning(&data_bucket).await?;
-    dp.set_cors(&data_bucket, "*").await?;
+    // Un seul bucket : versioning + CORS (prod virtual-host) + lecture publique du seul
+    // préfixe `site/`. Le préfixe `data/` reste privé (données d'incident).
+    dp.create_bucket(&bucket).await?;
+    dp.enable_versioning(&bucket).await?;
+    dp.set_cors(&bucket, "*").await?;
+    dp.put_public_read_prefix(&bucket, SITE_PREFIX).await?;
 
-    // bucket site : public read + déploiement
-    dp.create_bucket(&site_bucket).await?;
-    dp.put_public_read_policy(&site_bucket).await?;
-
-    // config.json non-secret injecté pour le site
+    // config.json non-secret injecté pour le site (l'upload va sous `data/`).
     let config_json = serde_json::json!({
         "endpoint": cfg.endpoint,
         "region": cfg.region,
-        "dataBucket": data_bucket,
+        "dataBucket": bucket,
         "usePathStyle": true
     })
     .to_string();
     dp.put_object_bytes(
-        &site_bucket,
-        "site/config.json",
+        &bucket,
+        &format!("{SITE_PREFIX}config.json"),
         config_json.into_bytes(),
         "application/json",
     )
     .await?;
 
-    // déployer les fichiers statiques du site (index.html, sigv4.js, upload.js…)
+    // déployer les fichiers statiques du site sous `site/`
     let site_dir = Path::new(&cfg.site_dir);
     if site_dir.exists() {
-        dp.deploy_dir(&site_bucket, site_dir, "site/").await?;
+        dp.deploy_dir(&bucket, site_dir, SITE_PREFIX).await?;
     }
 
-    // clé scopée écriture-seule pour la victime
+    // clé scopée écriture-seule, verrouillée au préfixe `data/` (ne peut pas altérer
+    // le site ni lire les données).
     let iam = MinioIam::from_config(cfg);
-    let creds = iam.create_scoped_upload_key(&data_bucket).await?;
+    let creds = iam.create_scoped_upload_key(&bucket, DATA_PREFIX).await?;
 
-    let site_url = format!("{}/{}/site/index.html", cfg.endpoint, site_bucket);
+    let site_url = format!("{}/{}/{SITE_PREFIX}index.html", cfg.endpoint, bucket);
     let case = Case {
         id: id.to_string(),
-        data_bucket,
-        site_bucket,
+        bucket,
         scoped_access_key: creds.access_key,
         site_url,
         state: CaseState::Active,
@@ -91,7 +92,8 @@ pub async fn pull_case(
 ) -> anyhow::Result<Vec<(String, PathBuf)>> {
     let case = Case::load(&cfg.cases_dir, id)?;
     let dp = admin_dp(cfg);
-    dp.download_all(&case.data_bucket, dest).await
+    // ne récupère que les données déposées (`data/`), pas les fichiers du site.
+    dp.download_prefix(&case.bucket, DATA_PREFIX, dest).await
 }
 
 pub async fn teardown_case(cfg: &Config, id: &str) -> anyhow::Result<()> {
@@ -103,8 +105,7 @@ pub async fn teardown_case(cfg: &Config, id: &str) -> anyhow::Result<()> {
     // révoquer la clé (ignore l'erreur si déjà supprimée)
     let _ = iam.delete_scoped_key(&case.scoped_access_key).await;
     let dp = admin_dp(cfg);
-    let _ = dp.delete_bucket(&case.data_bucket).await;
-    let _ = dp.delete_bucket(&case.site_bucket).await;
+    let _ = dp.delete_bucket(&case.bucket).await;
 
     let torn = Case {
         state: CaseState::TornDown,

@@ -134,15 +134,16 @@ impl S3DataPlane {
 }
 
 impl S3DataPlane {
-    /// Rend un bucket lisible publiquement (site statique).
-    pub async fn put_public_read_policy(&self, bucket: &str) -> anyhow::Result<()> {
+    /// Rend lisible publiquement **uniquement** les objets sous `prefix`
+    /// (ex. `site/`). Les autres préfixes (ex. `data/`) restent privés.
+    pub async fn put_public_read_prefix(&self, bucket: &str, prefix: &str) -> anyhow::Result<()> {
         let policy = serde_json::json!({
             "Version": "2012-10-17",
             "Statement": [{
                 "Effect": "Allow",
                 "Principal": {"AWS": ["*"]},
                 "Action": ["s3:GetObject"],
-                "Resource": [format!("arn:aws:s3:::{bucket}/*")]
+                "Resource": [format!("arn:aws:s3:::{bucket}/{prefix}*")]
             }]
         })
         .to_string();
@@ -211,10 +212,20 @@ impl S3DataPlane {
         bucket: &str,
         dest: &Path,
     ) -> anyhow::Result<Vec<(String, PathBuf)>> {
+        self.download_prefix(bucket, "", dest).await
+    }
+
+    /// Télécharge les objets d'un bucket sous `prefix` dans `dest`.
+    pub async fn download_prefix(
+        &self,
+        bucket: &str,
+        prefix: &str,
+        dest: &Path,
+    ) -> anyhow::Result<Vec<(String, PathBuf)>> {
         let mut out = Vec::new();
         let mut cont: Option<String> = None;
         loop {
-            let mut req = self.client.list_objects_v2().bucket(bucket);
+            let mut req = self.client.list_objects_v2().bucket(bucket).prefix(prefix);
             if let Some(t) = &cont {
                 req = req.continuation_token(t);
             }

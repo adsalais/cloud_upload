@@ -10,8 +10,8 @@ pub enum CaseState {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Case {
     pub id: String,
-    pub data_bucket: String,
-    pub site_bucket: String,
+    /// Bucket unique de l'affaire : `site/` public, `data/` privé.
+    pub bucket: String,
     pub scoped_access_key: String,
     pub site_url: String,
     pub state: CaseState,

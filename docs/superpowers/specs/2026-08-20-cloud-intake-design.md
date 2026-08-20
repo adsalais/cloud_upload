@@ -272,8 +272,10 @@ Seuls les points ⚠️ demandent une implémentation provider ; le reste est va
 
 ## 13. Décisions verrouillées (ex-points ouverts)
 - **Persistance des `Case`** : JSON local, un fichier par affaire (`cases/<id>.json`).
-- **Deux buckets par affaire** : `intake-data-<id>-<rand>` (privé, versioning, clé
-  scopée écriture-seule) + `intake-site-<id>-<rand>` (public-read, sert le site). La
-  séparation garantit qu'aucune policy publique ne touche jamais le bucket de données.
+- **Un seul bucket par affaire** (`intake-<id>-<rand>`), avec **isolation par préfixe**
+  (plus simple à gérer — une création, une destruction) : lecture publique sur `site/*`
+  **uniquement**, données privées sous `data/*`. La clé scopée n'écrit que sous `data/*`
+  (ne peut ni lire, ni lister, ni altérer le site). *(Révisé le 2026-08-20 : remplaçait
+  une conception à deux buckets.)*
 - **Manifeste de hashes hors-bande** : JSON `{ "<clé objet>": "<sha256 hex>" }`, fourni
   par un canal séparé, comparé par `pull-case`.

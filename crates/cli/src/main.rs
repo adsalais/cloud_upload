@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
             // Sortie : URL du site + les 3 valeurs à remettre à la victime (hors-bande).
             println!("case_id: {}", r.case.id);
             println!("site_url: {}", r.case.site_url);
-            println!("data_bucket: {}", r.case.data_bucket);
+            println!("bucket: {}", r.case.bucket);
             println!("--- credentials à remettre à la victime (hors-bande) ---");
             println!("access_key: {}", r.case.scoped_access_key);
             println!("secret_key: {}", r.scoped_secret_key);

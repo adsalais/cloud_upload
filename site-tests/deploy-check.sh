@@ -22,6 +22,11 @@ done
 grep -q '"dataBucket"' "/tmp/dc-config.json" || { echo "config.json sans dataBucket"; fail=1; }
 grep -q 'multipartUpload' "/tmp/dc-upload.js" || { echo "upload.js incomplet"; fail=1; }
 
+# Sécurité : le préfixe data/ ne doit PAS être lisible publiquement.
+DATA_URL="${BASE%site/}data/should-not-be-public"
+dcode="$(curl -s -o /dev/null -w '%{http_code}' "$DATA_URL")"
+if [ "$dcode" = "200" ]; then echo "FAIL data/ est public ($dcode)"; fail=1; else echo "OK   data/ privé ($dcode)"; fi
+
 "$BIN" teardown-case "$ID" --yes >/dev/null
 rm -f /tmp/dc-*
 if [ "$fail" = 0 ]; then echo "DEPLOY-CHECK: PASS"; else echo "DEPLOY-CHECK: FAIL"; exit 1; fi

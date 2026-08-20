@@ -19,8 +19,13 @@ impl MinioIam {
         }
     }
 
-    /// Crée une clé de service écriture-seule scopée à `data_bucket`.
-    pub async fn create_scoped_upload_key(&self, data_bucket: &str) -> anyhow::Result<ScopedCreds> {
+    /// Crée une clé de service écriture-seule scopée à `bucket/prefix*`
+    /// (ex. `prefix = "data/"` → ne peut écrire que sous `data/`, pas sur le site).
+    pub async fn create_scoped_upload_key(
+        &self,
+        bucket: &str,
+        prefix: &str,
+    ) -> anyhow::Result<ScopedCreds> {
         let policy = serde_json::json!({
             "Version": "2012-10-17",
             "Statement": [{
@@ -30,10 +35,10 @@ impl MinioIam {
                     "s3:AbortMultipartUpload",
                     "s3:ListMultipartUploadParts"
                 ],
-                "Resource": [format!("arn:aws:s3:::{data_bucket}/*")]
+                "Resource": [format!("arn:aws:s3:::{bucket}/{prefix}*")]
             }]
         });
-        let tmp = std::env::temp_dir().join(format!("intake-pol-{data_bucket}.json"));
+        let tmp = std::env::temp_dir().join(format!("intake-pol-{bucket}.json"));
         std::fs::write(&tmp, serde_json::to_vec_pretty(&policy)?)?;
 
         let out = tokio::process::Command::new("mc")

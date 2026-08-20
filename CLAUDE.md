@@ -85,7 +85,10 @@ key is long-lived and destroyed at teardown; its blast radius is one throwaway b
   deliberately swallows MinIO's `NotImplemented` (CORS matters only for prod virtual-host).
 - `cases/` holds scoped credentials and is git-ignored (root and nested). Gitignore does
   not accept end-of-line comments — keep patterns on their own line.
-- The SHA-256 integrity manifest is intentionally out of scope for the prototype.
+- Integrity: `intake_core::integrity` provides streaming SHA-256, `intake manifest`
+  (build `data-manifest.json` from local files/dirs), and pull-side verification
+  (`pull-case --manifest`, matched **by content** not key). Browser-side hashing for the
+  victim is still a follow-up (Web Crypto can't stream multi-GB).
 
 ## Commit convention
 

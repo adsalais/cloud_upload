@@ -80,8 +80,21 @@ Astuce : tu peux pré-remplir les identifiants via le fragment d'URL —
 ./target/release/intake pull-case demo --dest ./pulled
 ```
 Ceci utilise **tes credentials admin** (pas la clé de la victime) et ne télécharge que le
-préfixe `data/`. Les fichiers atterrissent sous `./pulled/data/…`. Vérifie l'intégrité
-(taille, ou un `sha256sum`, comparé à ce que la victime a envoyé hors-bande).
+préfixe `data/`. Les fichiers atterrissent sous `./pulled/data/…`.
+
+**Vérification d'intégrité (chaîne de custody).** Avant l'upload, celui qui possède les
+fichiers (la victime, ou toi sur une copie de référence) calcule un manifeste SHA-256 et
+te l'envoie **hors-bande** :
+```bash
+./target/release/intake manifest dump.raw memory.img --out data-manifest.json
+# → { "dump.raw": "9f2b…", "memory.img": "3ad0…" }
+```
+À la récupération, passe-le à `pull-case` : chaque objet est re-haché et comparé **par
+contenu** (robuste au préfixe `data/<horodatage>-` des clés) :
+```bash
+./target/release/intake pull-case demo --dest ./pulled --manifest data-manifest.json
+# OK / MANQUANT / INATTENDU par objet ; sort en erreur (exit ≠ 0) si divergence.
+```
 
 ### 4. Détruire l'affaire
 ```bash

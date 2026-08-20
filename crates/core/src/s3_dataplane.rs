@@ -1,10 +1,12 @@
 use crate::config::Config;
 use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
 use aws_sdk_s3::error::ProvideErrorMetadata;
+use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::types::{
     BucketVersioningStatus, CorsConfiguration, CorsRule, VersioningConfiguration,
 };
 use aws_sdk_s3::Client;
+use std::path::{Path, PathBuf};
 
 /// Construit un client S3 (compatible MinIO/Scaleway/OVH) en path-style.
 pub fn build_client(cfg: &Config, access: &str, secret: &str, session: Option<&str>) -> Client {
@@ -128,5 +130,126 @@ impl S3DataPlane {
         }
         self.client.delete_bucket().bucket(bucket).send().await?;
         Ok(())
+    }
+}
+
+impl S3DataPlane {
+    /// Rend un bucket lisible publiquement (site statique).
+    pub async fn put_public_read_policy(&self, bucket: &str) -> anyhow::Result<()> {
+        let policy = serde_json::json!({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Effect": "Allow",
+                "Principal": {"AWS": ["*"]},
+                "Action": ["s3:GetObject"],
+                "Resource": [format!("arn:aws:s3:::{bucket}/*")]
+            }]
+        })
+        .to_string();
+        self.client
+            .put_bucket_policy()
+            .bucket(bucket)
+            .policy(policy)
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    pub async fn put_object_bytes(
+        &self,
+        bucket: &str,
+        key: &str,
+        bytes: Vec<u8>,
+        content_type: &str,
+    ) -> anyhow::Result<()> {
+        self.client
+            .put_object()
+            .bucket(bucket)
+            .key(key)
+            .content_type(content_type)
+            .body(ByteStream::from(bytes))
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    /// Téléverse récursivement un dossier local sous `key_prefix`.
+    pub async fn deploy_dir(
+        &self,
+        bucket: &str,
+        dir: &Path,
+        key_prefix: &str,
+    ) -> anyhow::Result<()> {
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(d) = stack.pop() {
+            for entry in std::fs::read_dir(&d)? {
+                let path = entry?.path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                let rel = path.strip_prefix(dir)?.to_string_lossy().replace('\\', "/");
+                let key = format!("{key_prefix}{rel}");
+                let ct = content_type_for(&path);
+                let body = ByteStream::from_path(&path).await?;
+                self.client
+                    .put_object()
+                    .bucket(bucket)
+                    .key(&key)
+                    .content_type(ct)
+                    .body(body)
+                    .send()
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Télécharge tous les objets d'un bucket dans `dest`.
+    pub async fn download_all(
+        &self,
+        bucket: &str,
+        dest: &Path,
+    ) -> anyhow::Result<Vec<(String, PathBuf)>> {
+        let mut out = Vec::new();
+        let mut cont: Option<String> = None;
+        loop {
+            let mut req = self.client.list_objects_v2().bucket(bucket);
+            if let Some(t) = &cont {
+                req = req.continuation_token(t);
+            }
+            let resp = req.send().await?;
+            for obj in resp.contents() {
+                let key = match obj.key() {
+                    Some(k) => k.to_string(),
+                    None => continue,
+                };
+                let go = self.client.get_object().bucket(bucket).key(&key).send().await?;
+                let data = go.body.collect().await?.into_bytes();
+                let path = dest.join(&key);
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::write(&path, &data)?;
+                out.push((key, path));
+            }
+            if resp.is_truncated().unwrap_or(false) {
+                cont = resp.next_continuation_token().map(str::to_string);
+            } else {
+                break;
+            }
+        }
+        Ok(out)
+    }
+}
+
+fn content_type_for(path: &Path) -> &'static str {
+    match path.extension().and_then(|e| e.to_str()) {
+        Some("html") => "text/html; charset=utf-8",
+        Some("js") => "application/javascript",
+        Some("css") => "text/css",
+        Some("json") => "application/json",
+        Some("svg") => "image/svg+xml",
+        _ => "application/octet-stream",
     }
 }

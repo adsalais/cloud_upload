@@ -1,7 +1,7 @@
 # Rust
 /target
 **/*.rs.bk
-Cargo.lock  # binaire final : à re-décommenter si on veut le figer
+# Cargo.lock EST commité (application binaire → builds reproductibles, sécurité supply chain)
 
 # Node / site build
 node_modules/

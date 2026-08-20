@@ -120,14 +120,36 @@ Dépendances principales : `aws-sdk-s3`, `aws-config`, `aws-credential-types`, `
 `clap`, `serde`/`serde_json`/`toml`, `thiserror`/`anyhow`, `tracing`,
 `tokio::process::Command` (pour `mc`), `sha2` (vérification d'intégrité).
 
-### 5.3 Site statique d'upload
-- HTML + JS, bundle AWS SDK JS v3 (`@aws-sdk/client-s3` + `@aws-sdk/lib-storage`),
-  build minimal (Vite/esbuild) produisant des assets statiques déposés dans le bucket.
-- La victime **colle 3 valeurs** (access key / secret / — MinIO n'a pas de session token,
-  champ optionnel prévu pour un futur STS AWS) ; alternative : lecture depuis le
-  **fragment d'URL** (`#...`) pour un « clic → glisser-déposer » minimal.
-- `lib-storage`'s `Upload` gère le multipart, la reprise et une **barre de progression**.
-- Calcule (optionnel) le SHA-256 côté navigateur pour affichage/confirmation.
+### 5.3 Site statique d'upload — **zéro dépendance**
+Contrainte : **aucune dépendance tierce côté site** (réduction du risque de supply
+chain — c'est le composant exécuté par la victime). Donc **pas de Node/Vite, pas
+d'AWS SDK, pas de build**. Fichiers statiques purs :
+- `index.html` — formulaire (champs credential + zone glisser-déposer + barre de
+  progression).
+- `sigv4.js` — signature **AWS SigV4** en JS natif via **Web Crypto API**
+  (`crypto.subtle` : HMAC-SHA256 + SHA-256 fournis par le navigateur). On n'implémente
+  **aucune primitive cryptographique** — uniquement la canonicalisation de requête
+  SigV4 (formatage de chaînes), testable contre MinIO et les **vecteurs de test
+  officiels AWS SigV4**. `crypto.subtle` exige un contexte sécurisé, satisfait par
+  `localhost` (proto) et HTTPS (prod).
+- `upload.js` — orchestration multipart via `fetch` : `CreateMultipartUpload`
+  (POST `?uploads`), `UploadPart` (PUT `?partNumber&uploadId`, en-tête
+  `x-amz-content-sha256: UNSIGNED-PAYLOAD` pour éviter de re-lire chaque chunk),
+  `CompleteMultipartUpload` (POST, corps XML des parts/ETags). Gère le découpage, la
+  **reprise** (ré-émission des parts échouées) et une **barre de progression**.
+- La victime **colle 3 valeurs** (access key / secret / session token — vide sur MinIO,
+  champ prévu pour un futur STS AWS) ; alternative : **fragment d'URL** (`#...`).
+- Config non-secrète (endpoint, région, bucket data) injectée par affaire via un
+  `config.json` déposé à côté du site. **Adressage path-style** (`endpoint/bucket/key`)
+  → site et data partagent la même origine → **pas de CORS nécessaire dans le proto**
+  (CORS conservé côté service pour le mode virtual-host de prod).
+- SHA-256 navigateur : faisable pour **petits fichiers** (`crypto.subtle.digest`) ;
+  pour le multi-Go, non praticable (Web Crypto n'a pas de hash incrémental → tout en
+  mémoire). Intégrité des gros fichiers assurée par TLS + versioning + clé écriture-
+  seule ; ETag S3 comparable côté équipe.
+
+Total : ~300-400 lignes de JS auditables, sans `node_modules`. Compromis assumé : on
+possède la logique SigV4/multipart au lieu de la déléguer au SDK.
 
 ### 5.4 Récupération équipe
 - `pull-case` (creds admin) → liste + télécharge les objets du bucket, calcule le
@@ -239,10 +261,19 @@ Seuls les points ⚠️ demandent une implémentation provider ; le reste est va
 - **Multipart** : test d'upload d'un fichier volumineux (généré) et d'une **reprise**
   après coupure simulée.
 - **Intégrité** : test de vérification SHA-256 (cas OK et cas de divergence).
+- **SigV4 (`sigv4.js`)** : tests unitaires contre les **vecteurs officiels AWS SigV4**,
+  exécutés via le **runner intégré de Node** (`node --test`) — Node sert uniquement de
+  lanceur de test, **aucun paquet npm**, rien n'est embarqué. Le même `sigv4.js`/
+  `upload.js` tourne au navigateur (fetch + `crypto.subtle` communs à Node 20+ et au
+  navigateur).
+- **Multipart** : upload réel d'un fichier volumineux (généré) contre MinIO via une clé
+  scopée, exécuté depuis `node --test`, + test de **reprise** après part échouée.
 - **Site** : test manuel de bout en bout dans un navigateur contre MinIO local.
 
-## 13. Points ouverts
-- Format de persistance des `Case` (JSON local proposé) — à confirmer.
-- Emplacement/format du manifeste de hashes hors-bande.
-- Bucket unique (site + data) vs. deux buckets (site public / data privé) — la
-  séparation est plus propre en prod ; à trancher à l'implémentation.
+## 13. Décisions verrouillées (ex-points ouverts)
+- **Persistance des `Case`** : JSON local, un fichier par affaire (`cases/<id>.json`).
+- **Deux buckets par affaire** : `intake-data-<id>-<rand>` (privé, versioning, clé
+  scopée écriture-seule) + `intake-site-<id>-<rand>` (public-read, sert le site). La
+  séparation garantit qu'aucune policy publique ne touche jamais le bucket de données.
+- **Manifeste de hashes hors-bande** : JSON `{ "<clé objet>": "<sha256 hex>" }`, fourni
+  par un canal séparé, comparé par `pull-case`.

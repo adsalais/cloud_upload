@@ -24,8 +24,15 @@
 
 **Files:**
 - Create: `docker-compose.yml`
+- Create: `bin/mc` (wrapper : exécute `mc` via l'image Docker `minio/mc`, zéro install hôte)
 - Create: `scripts/bootstrap-minio.sh`
 - Create: `config.example.env`
+
+> **Adaptation docker-mc :** pas d'install hôte de `mc`. `bin/mc` lance l'image
+> officielle `minio/mc` avec `--network host`, une auth sans état via
+> `MC_HOST_<alias>` et `-v /tmp:/tmp` (+ `-v $PWD`) pour les fichiers `--policy`.
+> Le code Rust et les scripts appellent une commande nommée `mc` ; il suffit d'avoir
+> `bin/` sur le PATH (`export PATH="$PWD/bin:$PATH"`). Le reste du plan est inchangé.
 - Create: `Cargo.toml` (workspace)
 - Create: `crates/core/Cargo.toml`
 - Create: `crates/core/src/lib.rs`
@@ -55,24 +62,32 @@ services:
       - ./.minio-data:/data
 ```
 
-- [ ] **Step 2 : Écrire `scripts/bootstrap-minio.sh` (pose l'alias `mc` et attend que MinIO soit prêt)**
+- [ ] **Step 2a : Écrire le wrapper `bin/mc`** (client MinIO via Docker — voir le fichier
+  livré). Le rendre exécutable : `chmod +x bin/mc`.
+
+- [ ] **Step 2b : Écrire `scripts/bootstrap-minio.sh` (attend MinIO + valide le wrapper mc)**
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PATH="$ROOT/bin:$PATH"
 ALIAS="${INTAKE_MC_ALIAS:-myminio}"
 ENDPOINT="${INTAKE_ENDPOINT:-http://localhost:9000}"
-AK="${INTAKE_ADMIN_ACCESS_KEY:-minioadmin}"
-SK="${INTAKE_ADMIN_SECRET_KEY:-minioadmin}"
-mc alias set "$ALIAS" "$ENDPOINT" "$AK" "$SK"
-mc ready "$ALIAS"
-echo "MinIO prêt, alias '$ALIAS' configuré."
+echo "Attente de MinIO sur $ENDPOINT ..."
+for _ in $(seq 1 60); do
+  curl -fsS "$ENDPOINT/minio/health/live" >/dev/null 2>&1 && { echo "MinIO en ligne."; break; }
+  sleep 1
+done
+mc admin info "$ALIAS" >/dev/null   # valide le wrapper mc (Docker) et pré-tire l'image
+echo "mc (Docker) opérationnel — alias '$ALIAS' via MC_HOST."
 ```
 
 - [ ] **Step 3 : Écrire `config.example.env` (documentation des variables)**
 
 ```bash
 # Copier/adapter puis `source` avant de lancer le CLI ou les tests.
+export PATH="$PWD/bin:$PATH"   # rend `mc` (wrapper Docker) disponible
 export INTAKE_ENDPOINT=http://localhost:9000
 export INTAKE_REGION=us-east-1
 export INTAKE_ADMIN_ACCESS_KEY=minioadmin

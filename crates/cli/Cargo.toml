@@ -1,0 +1,14 @@
+[package]
+name = "intake-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "intake"
+path = "src/main.rs"
+
+[dependencies]
+intake-core = { path = "../core" }
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Wrapper : exécute le client MinIO `mc` via l'image Docker officielle `minio/mc`.
+# Aucune installation hôte. Auth sans config persistante via MC_HOST_<alias>.
+# /tmp et le répertoire courant sont montés pour que les fichiers --policy soient
+# lisibles dans le conteneur.
+set -euo pipefail
+
+ALIAS="${INTAKE_MC_ALIAS:-myminio}"
+AK="${INTAKE_ADMIN_ACCESS_KEY:-minioadmin}"
+SK="${INTAKE_ADMIN_SECRET_KEY:-minioadmin}"
+# Adresse de MinIO joignable depuis le conteneur (réseau host).
+HOSTPORT="${INTAKE_MC_HOSTPORT:-localhost:9000}"
+IMAGE="${INTAKE_MC_IMAGE:-minio/mc:latest}"
+
+exec docker run --rm --network host \
+  -e "MC_HOST_${ALIAS}=http://${AK}:${SK}@${HOSTPORT}" \
+  -v /tmp:/tmp \
+  -v "$PWD":"$PWD" -w "$PWD" \
+  --entrypoint mc \
+  "$IMAGE" "$@"

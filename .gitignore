@@ -9,11 +9,14 @@ dist/
 .vite/
 
 # Secrets & état d'affaires — NE JAMAIS COMMIT
+# (gitignore n'accepte PAS de commentaire en fin de ligne : le motif doit être seul)
 .env
 .env.*
 *.creds
 *.secret
-cases/            # état persisté des affaires (peut contenir des identifiants de clé)
+# état persisté des affaires (peut contenir des identifiants de clé) :
+cases/
+**/cases/
 secrets/
 
 # Données locales MinIO

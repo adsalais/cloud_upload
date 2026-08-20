@@ -1,5 +1,9 @@
 use crate::config::Config;
 use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
+use aws_sdk_s3::error::ProvideErrorMetadata;
+use aws_sdk_s3::types::{
+    BucketVersioningStatus, CorsConfiguration, CorsRule, VersioningConfiguration,
+};
 use aws_sdk_s3::Client;
 
 /// Construit un client S3 (compatible MinIO/Scaleway/OVH) en path-style.
@@ -13,4 +17,116 @@ pub fn build_client(cfg: &Config, access: &str, secret: &str, session: Option<&s
         .force_path_style(true)
         .build();
     Client::from_conf(s3conf)
+}
+
+/// Plan de données S3, portable entre MinIO et les providers compatibles S3.
+pub struct S3DataPlane {
+    pub client: Client,
+}
+
+impl S3DataPlane {
+    pub fn new(client: Client) -> Self {
+        Self { client }
+    }
+
+    pub async fn create_bucket(&self, name: &str) -> anyhow::Result<()> {
+        // région us-east-1 : pas de CreateBucketConfiguration
+        self.client.create_bucket().bucket(name).send().await?;
+        Ok(())
+    }
+
+    pub async fn enable_versioning(&self, bucket: &str) -> anyhow::Result<()> {
+        let vc = VersioningConfiguration::builder()
+            .status(BucketVersioningStatus::Enabled)
+            .build();
+        self.client
+            .put_bucket_versioning()
+            .bucket(bucket)
+            .versioning_configuration(vc)
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    /// Configure le CORS du bucket. Non bloquant si le backend ne l'implémente pas
+    /* (MinIO renvoie `NotImplemented`) : en proto on est en path-style/même origine,
+       le CORS n'est requis qu'en prod virtual-host (Scaleway/OVH le supportent). */
+    pub async fn set_cors(&self, bucket: &str, origin: &str) -> anyhow::Result<()> {
+        let rule = CorsRule::builder()
+            .allowed_methods("PUT")
+            .allowed_methods("POST")
+            .allowed_methods("GET")
+            .allowed_methods("HEAD")
+            .allowed_origins(origin)
+            .allowed_headers("*")
+            .expose_headers("ETag")
+            .max_age_seconds(3000)
+            .build()?;
+        let cc = CorsConfiguration::builder().cors_rules(rule).build()?;
+        match self
+            .client
+            .put_bucket_cors()
+            .bucket(bucket)
+            .cors_configuration(cc)
+            .send()
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                if e.code() == Some("NotImplemented") {
+                    Ok(())
+                } else {
+                    Err(e.into())
+                }
+            }
+        }
+    }
+
+    pub async fn delete_bucket(&self, bucket: &str) -> anyhow::Result<()> {
+        let mut key_marker: Option<String> = None;
+        let mut ver_marker: Option<String> = None;
+        loop {
+            let mut req = self.client.list_object_versions().bucket(bucket);
+            if let Some(k) = &key_marker {
+                req = req.key_marker(k);
+            }
+            if let Some(v) = &ver_marker {
+                req = req.version_id_marker(v);
+            }
+            let resp = match req.send().await {
+                Ok(r) => r,
+                Err(_) => break, // bucket inexistant : rien à purger
+            };
+            for v in resp.versions() {
+                if let (Some(k), Some(id)) = (v.key(), v.version_id()) {
+                    self.client
+                        .delete_object()
+                        .bucket(bucket)
+                        .key(k)
+                        .version_id(id)
+                        .send()
+                        .await?;
+                }
+            }
+            for d in resp.delete_markers() {
+                if let (Some(k), Some(id)) = (d.key(), d.version_id()) {
+                    self.client
+                        .delete_object()
+                        .bucket(bucket)
+                        .key(k)
+                        .version_id(id)
+                        .send()
+                        .await?;
+                }
+            }
+            if resp.is_truncated().unwrap_or(false) {
+                key_marker = resp.next_key_marker().map(str::to_string);
+                ver_marker = resp.next_version_id_marker().map(str::to_string);
+            } else {
+                break;
+            }
+        }
+        self.client.delete_bucket().bucket(bucket).send().await?;
+        Ok(())
+    }
 }

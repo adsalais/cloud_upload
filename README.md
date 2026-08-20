@@ -34,8 +34,9 @@ source config.example.env
 cargo test
 
 # Site (zéro dépendance, runner intégré de Node) :
+source config.example.env          # met bin/ sur le PATH (mc) pour le provisioning
 eval "$(bash site-tests/provision.sh)"
-node --test site-tests/
+node --test site-tests/*.test.mjs
 bash site-tests/deprovision.sh
 ```
 

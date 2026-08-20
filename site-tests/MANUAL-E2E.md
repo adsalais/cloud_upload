@@ -23,7 +23,7 @@ Prérequis : MinIO lancé + bootstrap (Plan A), `intake` construit, `bin/` sur l
    ```
 
 Note : la signature et le multipart sont déjà couverts par les tests Node
-(`node --test site-tests/`). Ce test manuel ne valide que le câblage UI (glisser-déposer,
+(`node --test site-tests/*.test.mjs`). Ce test manuel ne valide que le câblage UI (glisser-déposer,
 barre de progression, chargement de `config.json`). Le déploiement du site (fichiers
 servis publiquement + `config.json`) est vérifié automatiquement par
 `site-tests/deploy-check.sh`.

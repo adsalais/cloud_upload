@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dépôt de fichiers sécurisé</title>
+  <title>Secure file upload</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; }
     input { display: block; width: 100%; margin: .4rem 0; padding: .5rem; box-sizing: border-box; }
@@ -15,13 +15,13 @@
   </style>
 </head>
 <body>
-  <h1>Dépôt de fichiers</h1>
-  <p>Renseignez les identifiants fournis, puis déposez votre fichier.</p>
+  <h1>File upload</h1>
+  <p>Enter the provided credentials, then drop your file.</p>
   <input id="ak" placeholder="Access key" autocomplete="off" />
   <input id="sk" placeholder="Secret key" type="password" autocomplete="off" />
-  <input id="st" placeholder="Session token (laisser vide si non fourni)" autocomplete="off" />
+  <input id="st" placeholder="Session token (leave empty if not provided)" autocomplete="off" />
   <input type="file" id="file" />
-  <div id="drop">Ou glissez un fichier ici</div>
+  <div id="drop">Or drag a file here</div>
   <progress id="bar" value="0" max="100"></progress>
   <div id="status"></div>
 
@@ -33,26 +33,26 @@
     fetch('./config.json')
       .then((r) => r.json())
       .then((c) => { config = c; })
-      .catch(() => { $('status').innerHTML = '<span class="err">config.json introuvable</span>'; });
+      .catch(() => { $('status').innerHTML = '<span class="err">config.json not found</span>'; });
 
-    // Pré-remplissage via le fragment d'URL (#ak=...&sk=...&st=...)
+    // Pre-fill credentials from the URL fragment (#ak=...&sk=...&st=...)
     const frag = new URLSearchParams(location.hash.slice(1));
     for (const k of ['ak', 'sk', 'st']) if (frag.get(k)) $(k).value = frag.get(k);
 
     async function start(file) {
       if (!file) return;
-      if (!config) { $('status').innerHTML = '<span class="err">config non chargée</span>'; return; }
+      if (!config) { $('status').innerHTML = '<span class="err">config not loaded</span>'; return; }
       const creds = {
         accessKey: $('ak').value.trim(),
         secretKey: $('sk').value.trim(),
         sessionToken: $('st').value.trim() || undefined,
       };
       if (!creds.accessKey || !creds.secretKey) {
-        $('status').innerHTML = '<span class="err">identifiants manquants</span>';
+        $('status').innerHTML = '<span class="err">missing credentials</span>';
         return;
       }
       const key = `data/${Date.now()}-${file.name}`;
-      $('status').textContent = 'Envoi en cours…';
+      $('status').textContent = 'Uploading…';
       try {
         await multipartUpload({
           endpoint: config.endpoint,
@@ -63,9 +63,9 @@
           creds,
           onProgress: (p) => { $('bar').value = Math.round((100 * p.uploaded) / p.total); },
         });
-        $('status').textContent = 'Terminé ✔ — merci, vous pouvez fermer cette page.';
+        $('status').textContent = 'Done ✔ — thank you, you can close this page.';
       } catch (e) {
-        $('status').innerHTML = `<span class="err">Échec : ${e.message}</span>`;
+        $('status').innerHTML = `<span class="err">Failed: ${e.message}</span>`;
       }
     }
 

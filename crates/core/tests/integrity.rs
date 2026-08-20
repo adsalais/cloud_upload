@@ -11,7 +11,7 @@ fn manifest_then_verify_detects_tampering() {
     let manifest = build_manifest(&[src.join("a.bin"), src.join("b.bin")]).unwrap();
     assert_eq!(manifest.len(), 2);
 
-    // objets "téléchargés" : mêmes octets, clés avec préfixe data/ + horodatage
+    // "downloaded" objects: same bytes, keys carry a data/ prefix + timestamp
     let dl = std::env::temp_dir().join("intake-integrity-dl");
     let _ = std::fs::remove_dir_all(&dl);
     std::fs::create_dir_all(&dl).unwrap();
@@ -22,12 +22,12 @@ fn manifest_then_verify_detects_tampering() {
         ("data/1699999999-b.bin".to_string(), b.clone()),
     ];
 
-    // tout concorde (par contenu, malgré les clés horodatées)
+    // everything matches (by content, despite the timestamped keys)
     let ok = verify(&downloaded, &manifest).unwrap();
-    assert!(ok.is_ok(), "attendu OK : {ok:?}");
+    assert!(ok.is_ok(), "expected OK: {ok:?}");
     assert_eq!(ok.matched.len(), 2);
 
-    // altération d'un objet reçu -> MANQUANT (attendu non reçu) + INATTENDU (reçu inconnu)
+    // tamper a received object -> MISSING (expected not received) + UNEXPECTED (unknown received)
     std::fs::write(&b, b"tampered").unwrap();
     let bad = verify(&downloaded, &manifest).unwrap();
     assert!(!bad.is_ok());

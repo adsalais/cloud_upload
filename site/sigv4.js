@@ -1,6 +1,6 @@
-// sigv4.js — signature AWS SigV4, ZÉRO dépendance (Web Crypto).
-// Primitives crypto = crypto.subtle (navigateur/Node). On n'écrit que la
-// canonicalisation (formatage de chaînes), testée exactement + contre MinIO.
+// sigv4.js — AWS SigV4 signing, ZERO dependencies (Web Crypto).
+// Crypto primitives = crypto.subtle (browser/Node). We only implement the
+// canonicalization (string formatting), tested exactly + against MinIO.
 
 const encoder = new TextEncoder();
 
@@ -121,7 +121,7 @@ export async function signRequest(opts) {
     `AWS4-HMAC-SHA256 Credential=${accessKey}/${scope}, ` +
     `SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
-  // 'host' est signé mais jamais envoyé via fetch (interdit au navigateur).
+  // 'host' is signed but never sent via fetch (forbidden in the browser).
   const sendHeaders = { ...headers, Authorization: authorization };
   delete sendHeaders.host;
 

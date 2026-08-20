@@ -8,7 +8,7 @@ use aws_sdk_s3::types::{
 use aws_sdk_s3::Client;
 use std::path::{Path, PathBuf};
 
-/// Construit un client S3 (compatible MinIO/Scaleway/OVH) en path-style.
+/// Builds an S3 client (MinIO / any S3-compatible provider) in path-style.
 pub fn build_client(cfg: &Config, access: &str, secret: &str, session: Option<&str>) -> Client {
     let creds = Credentials::new(access, secret, session.map(|s| s.to_string()), None, "static");
     let s3conf = aws_sdk_s3::config::Builder::new()
@@ -21,7 +21,7 @@ pub fn build_client(cfg: &Config, access: &str, secret: &str, session: Option<&s
     Client::from_conf(s3conf)
 }
 
-/// Plan de données S3, portable entre MinIO et les providers compatibles S3.
+/// S3 data plane, portable across MinIO and S3-compatible providers.
 pub struct S3DataPlane {
     pub client: Client,
 }
@@ -32,7 +32,7 @@ impl S3DataPlane {
     }
 
     pub async fn create_bucket(&self, name: &str) -> anyhow::Result<()> {
-        // région us-east-1 : pas de CreateBucketConfiguration
+        // region us-east-1: no CreateBucketConfiguration
         self.client.create_bucket().bucket(name).send().await?;
         Ok(())
     }
@@ -50,9 +50,9 @@ impl S3DataPlane {
         Ok(())
     }
 
-    /// Configure le CORS du bucket. Non bloquant si le backend ne l'implémente pas
-    /* (MinIO renvoie `NotImplemented`) : en proto on est en path-style/même origine,
-       le CORS n'est requis qu'en prod virtual-host (Scaleway/OVH le supportent). */
+    /// Sets the bucket CORS. Non-fatal if the backend doesn't implement it
+    /* (MinIO returns `NotImplemented`): in the prototype we're path-style/same-origin,
+       CORS is only needed for prod virtual-host (S3-compatible providers support it). */
     pub async fn set_cors(&self, bucket: &str, origin: &str) -> anyhow::Result<()> {
         let rule = CorsRule::builder()
             .allowed_methods("PUT")
@@ -97,7 +97,7 @@ impl S3DataPlane {
             }
             let resp = match req.send().await {
                 Ok(r) => r,
-                Err(_) => break, // bucket inexistant : rien à purger
+                Err(_) => break, // bucket doesn't exist: nothing to purge
             };
             for v in resp.versions() {
                 if let (Some(k), Some(id)) = (v.key(), v.version_id()) {
@@ -134,8 +134,8 @@ impl S3DataPlane {
 }
 
 impl S3DataPlane {
-    /// Rend lisible publiquement **uniquement** les objets sous `prefix`
-    /// (ex. `site/`). Les autres préfixes (ex. `data/`) restent privés.
+    /// Makes **only** the objects under `prefix` publicly readable
+    /// (e.g. `site/`). Other prefixes (e.g. `data/`) stay private.
     pub async fn put_public_read_prefix(&self, bucket: &str, prefix: &str) -> anyhow::Result<()> {
         let policy = serde_json::json!({
             "Version": "2012-10-17",
@@ -174,7 +174,7 @@ impl S3DataPlane {
         Ok(())
     }
 
-    /// Téléverse récursivement un dossier local sous `key_prefix`.
+    /// Recursively uploads a local directory under `key_prefix`.
     pub async fn deploy_dir(
         &self,
         bucket: &str,
@@ -206,7 +206,7 @@ impl S3DataPlane {
         Ok(())
     }
 
-    /// Télécharge tous les objets d'un bucket dans `dest`.
+    /// Downloads all objects of a bucket into `dest`.
     pub async fn download_all(
         &self,
         bucket: &str,
@@ -215,7 +215,7 @@ impl S3DataPlane {
         self.download_prefix(bucket, "", dest).await
     }
 
-    /// Télécharge les objets d'un bucket sous `prefix` dans `dest`.
+    /// Downloads a bucket's objects under `prefix` into `dest`.
     pub async fn download_prefix(
         &self,
         bucket: &str,

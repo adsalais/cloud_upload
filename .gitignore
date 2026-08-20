@@ -1,28 +1,28 @@
 # Rust
 /target
 **/*.rs.bk
-# Cargo.lock EST commité (application binaire → builds reproductibles, sécurité supply chain)
+# Cargo.lock IS committed (application binary -> reproducible builds, supply-chain safety)
 
 # Node / site build
 node_modules/
 dist/
 .vite/
 
-# Secrets & état d'affaires — NE JAMAIS COMMIT
-# (gitignore n'accepte PAS de commentaire en fin de ligne : le motif doit être seul)
+# Secrets & case state — NEVER COMMIT
+# (gitignore does NOT accept end-of-line comments: a pattern must stand alone)
 .env
 .env.*
 *.creds
 *.secret
-# état persisté des affaires (peut contenir des identifiants de clé) :
+# persisted case state (may contain key credentials):
 cases/
 **/cases/
 secrets/
 
-# Données locales MinIO
+# Local MinIO data
 .minio-data/
 minio-data/
 
-# Divers
+# Misc
 .DS_Store
 *.log

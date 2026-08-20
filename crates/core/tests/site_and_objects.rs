@@ -14,29 +14,29 @@ async fn site_prefix_public_data_prefix_private() {
     dp.create_bucket(bucket).await.unwrap();
     dp.put_public_read_prefix(bucket, "site/").await.unwrap();
 
-    // déployer un dossier temporaire contenant index.html sous site/
+    // deploy a temp directory containing index.html under site/
     let tmp = std::env::temp_dir().join("intake-site-src");
     std::fs::create_dir_all(&tmp).unwrap();
     std::fs::write(tmp.join("index.html"), b"<h1>ok</h1>").unwrap();
     dp.deploy_dir(bucket, &tmp, "site/").await.unwrap();
 
-    // un objet "données" privé
+    // a private "data" object
     dp.put_object_bytes(bucket, "data/a.bin", vec![1, 2, 3], "application/octet-stream")
         .await
         .unwrap();
 
-    // site/ lisible publiquement (200)
+    // site/ publicly readable (200)
     let site_url = format!("{}/{}/site/index.html", cfg.endpoint, bucket);
     let (code, body) = http_get(&site_url).await;
-    assert_eq!(code, "200", "site/index.html devrait être public");
+    assert_eq!(code, "200", "site/index.html should be public");
     assert!(body.contains("ok"));
 
-    // data/ NON lisible publiquement (403 attendu)
+    // data/ NOT publicly readable (expect 403)
     let data_url = format!("{}/{}/data/a.bin", cfg.endpoint, bucket);
     let (code, _) = http_get(&data_url).await;
-    assert_eq!(code, "403", "data/ ne doit PAS être public (obtenu {code})");
+    assert_eq!(code, "403", "data/ must NOT be public (got {code})");
 
-    // l'équipe (admin) récupère bien le préfixe data/
+    // the team (admin) does retrieve the data/ prefix
     let dest = std::env::temp_dir().join("intake-dl");
     let _ = std::fs::remove_dir_all(&dest);
     let files = dp.download_prefix(bucket, "data/", &dest).await.unwrap();
@@ -46,7 +46,7 @@ async fn site_prefix_public_data_prefix_private() {
     dp.delete_bucket(bucket).await.unwrap();
 }
 
-// GET HTTP sans dépendance : via `curl`. Retourne (code HTTP, corps).
+// Dependency-free HTTP GET via `curl`. Returns (HTTP code, body).
 async fn http_get(url: &str) -> (String, String) {
     let out = tokio::process::Command::new("curl")
         .args(["-s", "-w", "\n%{http_code}", url])

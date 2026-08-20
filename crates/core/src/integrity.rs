@@ -1,16 +1,15 @@
-//! Intégrité par SHA-256 : manifeste + vérification côté récupération.
-//! Hachage en flux (chunks de 1 MiB) → mémoire constante même pour des fichiers de
-//! plusieurs Go.
+//! SHA-256 integrity: manifest + verification on the retrieval side.
+//! Streaming hash (1 MiB chunks) -> constant memory even for multi-GB files.
 
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-/// Étiquette (nom de fichier / chemin relatif) -> SHA-256 hexadécimal minuscule.
+/// Label (file name / relative path) -> lowercase hex SHA-256.
 pub type Manifest = BTreeMap<String, String>;
 
-/// SHA-256 d'un fichier, en flux.
+/// Streaming SHA-256 of a file.
 pub fn sha256_file(path: &Path) -> anyhow::Result<String> {
     let mut f = std::fs::File::open(path)?;
     let mut hasher = Sha256::new();
@@ -41,8 +40,8 @@ fn collect_dir(dir: &Path, base: &Path, out: &mut Vec<(String, PathBuf)>) -> any
     Ok(())
 }
 
-/// Construit un manifeste à partir de fichiers et/ou dossiers locaux.
-/// Étiquette : nom de base pour un fichier, chemin relatif au dossier pour un dossier.
+/// Builds a manifest from local files and/or directories.
+/// Label: base name for a file, path relative to the directory for a directory.
 pub fn build_manifest(paths: &[PathBuf]) -> anyhow::Result<Manifest> {
     let mut files: Vec<(String, PathBuf)> = Vec::new();
     for p in paths {
@@ -74,11 +73,11 @@ pub fn load_manifest(path: &Path) -> anyhow::Result<Manifest> {
 
 #[derive(Debug, Default)]
 pub struct VerifyReport {
-    /// (clé de l'objet, étiquette(s) correspondante(s) du manifeste)
+    /// (object key, matching manifest label(s))
     pub matched: Vec<(String, String)>,
-    /// objets reçus dont le hash n'est pas au manifeste (clé, sha256)
+    /// received objects whose hash isn't in the manifest (key, sha256)
     pub unexpected: Vec<(String, String)>,
-    /// entrées du manifeste dont le hash n'a pas été reçu (étiquette, sha256)
+    /// manifest entries whose hash wasn't received (label, sha256)
     pub missing: Vec<(String, String)>,
 }
 
@@ -88,9 +87,9 @@ impl VerifyReport {
     }
 }
 
-/// Vérifie des objets téléchargés (clé, chemin local) contre un manifeste, **par
-/// contenu** (le hash), indépendamment du nom de clé (qui porte un préfixe `data/` et un
-/// horodatage inconnus à l'avance).
+/// Verifies downloaded objects (key, local path) against a manifest, **by content**
+/// (the hash), regardless of the key name (which carries a `data/` prefix and a
+/// timestamp not known in advance).
 pub fn verify(
     downloaded: &[(String, PathBuf)],
     manifest: &Manifest,

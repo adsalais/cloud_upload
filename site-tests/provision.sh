@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Provisionne un bucket jetable + une clé scopée écriture-seule et imprime des exports.
-# Usage : eval "$(bash site-tests/provision.sh)"   (bin/ doit être sur le PATH pour mc)
+# Provisions a throwaway bucket + a write-only scoped key and prints exports.
+# Usage: eval "$(bash site-tests/provision.sh)"   (bin/ must be on PATH for mc)
 set -euo pipefail
 ALIAS="${INTAKE_MC_ALIAS:-myminio}"
 PARENT="${INTAKE_MC_PARENT:-minioadmin}"

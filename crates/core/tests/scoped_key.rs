@@ -19,7 +19,7 @@ async fn scoped_key_can_only_write_under_data_prefix() {
     let creds = iam.create_scoped_upload_key(bucket, "data/").await.unwrap();
     let scoped = build_client(&cfg, &creds.access_key, &creds.secret_key, None);
 
-    // POSITIF : écrire sous data/
+    // POSITIVE: write under data/
     let put_ok = scoped
         .put_object()
         .bucket(bucket)
@@ -27,9 +27,9 @@ async fn scoped_key_can_only_write_under_data_prefix() {
         .body(vec![9u8, 9, 9].into())
         .send()
         .await;
-    assert!(put_ok.is_ok(), "la clé scopée devrait pouvoir écrire sous data/ : {put_ok:?}");
+    assert!(put_ok.is_ok(), "scoped key should be able to write under data/: {put_ok:?}");
 
-    // NÉGATIF 1 : altérer le site (écrire sous site/) -> refusé
+    // NEGATIVE 1: tamper with the site (write under site/) -> denied
     let tamper = scoped
         .put_object()
         .bucket(bucket)
@@ -37,9 +37,9 @@ async fn scoped_key_can_only_write_under_data_prefix() {
         .body(vec![1u8].into())
         .send()
         .await;
-    assert!(tamper.is_err(), "la clé scopée ne doit PAS pouvoir écrire sous site/");
+    assert!(tamper.is_err(), "scoped key must NOT be able to write under site/");
 
-    // NÉGATIF 2 : écrire hors de data/ (racine) -> refusé
+    // NEGATIVE 2: write outside data/ (root) -> denied
     let root = scoped
         .put_object()
         .bucket(bucket)
@@ -47,25 +47,25 @@ async fn scoped_key_can_only_write_under_data_prefix() {
         .body(vec![1u8].into())
         .send()
         .await;
-    assert!(root.is_err(), "la clé scopée ne doit écrire QUE sous data/");
+    assert!(root.is_err(), "scoped key must ONLY write under data/");
 
-    // NÉGATIF 3 : lire -> refusé
+    // NEGATIVE 3: read -> denied
     let get = scoped
         .get_object()
         .bucket(bucket)
         .key("data/evidence/a.bin")
         .send()
         .await;
-    assert!(get.is_err(), "la clé scopée ne doit PAS pouvoir lire");
+    assert!(get.is_err(), "scoped key must NOT be able to read");
 
-    // NÉGATIF 4 : lister -> refusé
+    // NEGATIVE 4: list -> denied
     let list = scoped.list_objects_v2().bucket(bucket).send().await;
-    assert!(list.is_err(), "la clé scopée ne doit PAS pouvoir lister");
+    assert!(list.is_err(), "scoped key must NOT be able to list");
 
-    // révocation
+    // revoke
     iam.delete_scoped_key(&creds.access_key).await.unwrap();
 
-    // NÉGATIF 5 : après révocation, l'écriture échoue
+    // NEGATIVE 5: after revocation, writing fails
     let put_after = scoped
         .put_object()
         .bucket(bucket)
@@ -73,7 +73,7 @@ async fn scoped_key_can_only_write_under_data_prefix() {
         .body(vec![0u8].into())
         .send()
         .await;
-    assert!(put_after.is_err(), "la clé révoquée ne doit plus fonctionner");
+    assert!(put_after.is_err(), "revoked key must no longer work");
 
     admin.delete_bucket(bucket).await.unwrap();
 }

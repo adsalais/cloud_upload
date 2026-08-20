@@ -7,18 +7,18 @@ import {
   signRequest,
 } from '../site/sigv4.js';
 
-test('encodePath encode chaque segment, préserve les slashes', () => {
+test('encodePath encodes each segment, preserves slashes', () => {
   assert.strictEqual(encodePath('bucket/a b/c.txt'), '/bucket/a%20b/c.txt');
 });
 
-test('canonicalQueryString trie et encode', () => {
+test('canonicalQueryString sorts and encodes', () => {
   assert.strictEqual(
     canonicalQueryString({ uploadId: 'a b', partNumber: '2' }),
     'partNumber=2&uploadId=a%20b'
   );
 });
 
-test('buildCanonicalRequest assemble exactement la chaîne SigV4', () => {
+test('buildCanonicalRequest assembles the exact SigV4 string', () => {
   const { canonicalRequest, signedHeaders } = buildCanonicalRequest({
     method: 'PUT',
     canonicalUri: '/mybucket/evidence/a.txt',
@@ -44,12 +44,12 @@ test('buildCanonicalRequest assemble exactement la chaîne SigV4', () => {
   assert.strictEqual(canonicalRequest, expected);
 });
 
-// --- Intégration : PUT signé réel accepté par MinIO (skip si non provisionné) ---
+// --- Integration: real signed PUT accepted by MinIO (skipped if not provisioned) ---
 const BUCKET = process.env.TEST_DATA_BUCKET;
 const ENDPOINT = process.env.INTAKE_ENDPOINT || 'http://localhost:9000';
 const REGION = process.env.INTAKE_REGION || 'us-east-1';
 
-test('PUT signé réel accepté par MinIO', { skip: !BUCKET }, async () => {
+test('real signed PUT accepted by MinIO', { skip: !BUCKET }, async () => {
   const key = 'sigtest/hello.txt';
   const { url, headers } = await signRequest({
     method: 'PUT',
@@ -60,5 +60,5 @@ test('PUT signé réel accepté par MinIO', { skip: !BUCKET }, async () => {
     secretKey: process.env.TEST_SCOPED_SK,
   });
   const res = await fetch(url, { method: 'PUT', headers, body: new TextEncoder().encode('hello') });
-  assert.strictEqual(res.status, 200, `PUT status ${res.status} — signature invalide ? ${await res.text()}`);
+  assert.strictEqual(res.status, 200, `PUT status ${res.status} - invalid signature? ${await res.text()}`);
 });

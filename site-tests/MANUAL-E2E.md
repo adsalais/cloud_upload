@@ -1,29 +1,28 @@
-# Test E2E manuel (navigateur)
+# Manual E2E test (browser)
 
-Prérequis : MinIO lancé + bootstrap (Plan A), `intake` construit, `bin/` sur le PATH,
-`./site/` contient `index.html`, `sigv4.js`, `upload.js`, `package.json`.
+Prerequisites: MinIO running + bootstrap, `intake` built, `bin/` on PATH, and `./site/`
+contains `index.html`, `sigv4.js`, `upload.js`, `package.json`.
 
-1. Créer une affaire (déploie `./site/` + `config.json`, imprime l'URL + les creds) :
+1. Create a case (deploys `./site/` + `config.json`, prints the URL + creds):
    ```bash
    source config.example.env
    ./target/release/intake create-case demo-e2e
    ```
-2. Ouvrir l'`site_url` imprimée dans un navigateur (sur `localhost` → contexte sécurisé OK).
-3. Coller `access_key` / `secret_key` (session token vide), glisser un fichier de
-   plusieurs centaines de Mo.
-4. Vérifier : la barre progresse, puis « Terminé ✔ ».
-5. Côté équipe :
+2. Open the printed `site_url` in a browser (on `localhost` -> secure context OK).
+3. Paste `access_key` / `secret_key` (session token empty), drag a file of a few
+   hundred MB.
+4. Check: the progress bar advances, then "Done ✔".
+5. Team side:
    ```bash
    ./target/release/intake pull-case demo-e2e --dest ./pulled
    ```
-   → le fichier déposé est présent et intègre (comparer la taille / un `sha256sum`).
-6. Détruire :
+   -> the dropped file is present and intact (compare size / a `sha256sum`).
+6. Destroy:
    ```bash
    ./target/release/intake teardown-case demo-e2e --yes
    ```
 
-Note : la signature et le multipart sont déjà couverts par les tests Node
-(`node --test site-tests/*.test.mjs`). Ce test manuel ne valide que le câblage UI (glisser-déposer,
-barre de progression, chargement de `config.json`). Le déploiement du site (fichiers
-servis publiquement + `config.json`) est vérifié automatiquement par
-`site-tests/deploy-check.sh`.
+Note: signing and multipart are already covered by the Node tests
+(`node --test site-tests/*.test.mjs`). This manual test only validates the UI wiring
+(drag-drop, progress bar, loading `config.json`). Site deployment (files served publicly
++ `config.json`) is verified automatically by `site-tests/deploy-check.sh`.

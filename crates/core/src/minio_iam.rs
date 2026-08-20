@@ -1,6 +1,6 @@
 use crate::config::Config;
 
-/// Plan de contrôle IAM spécifique MinIO, via le client `mc`.
+/// MinIO-specific IAM control plane, via the `mc` client.
 pub struct MinioIam {
     pub alias: String,
     pub parent: String,
@@ -19,8 +19,8 @@ impl MinioIam {
         }
     }
 
-    /// Crée une clé de service écriture-seule scopée à `bucket/prefix*`
-    /// (ex. `prefix = "data/"` → ne peut écrire que sous `data/`, pas sur le site).
+    /// Creates a write-only service key scoped to `bucket/prefix*`
+    /// (e.g. `prefix = "data/"` -> can only write under `data/`, not the site).
     pub async fn create_scoped_upload_key(
         &self,
         bucket: &str,
@@ -53,7 +53,7 @@ impl MinioIam {
 
         if !out.status.success() {
             anyhow::bail!(
-                "mc svcacct add a échoué : {}",
+                "mc svcacct add failed: {}",
                 String::from_utf8_lossy(&out.stderr)
             );
         }
@@ -79,7 +79,7 @@ impl MinioIam {
             .await?;
         if !out.status.success() {
             anyhow::bail!(
-                "mc svcacct rm a échoué : {}",
+                "mc svcacct rm failed: {}",
                 String::from_utf8_lossy(&out.stderr)
             );
         }

@@ -3,8 +3,8 @@ import assert from 'node:assert';
 import { execFileSync } from 'node:child_process';
 import { multipartUpload, putPartWithRetry } from '../site/upload.js';
 
-// --- Unitaire : la reprise (retry) d'une part qui échoue une fois ---
-test('putPartWithRetry réessaie puis réussit', async () => {
+// --- Unit: retry of a part that fails once ---
+test('putPartWithRetry retries then succeeds', async () => {
   let calls = 0;
   const orig = globalThis.fetch;
   globalThis.fetch = async () => {
@@ -30,15 +30,15 @@ test('putPartWithRetry réessaie puis réussit', async () => {
   }
 });
 
-// --- Intégration : multipart réel (3 parts) contre MinIO ---
+// --- Integration: real multipart (3 parts) against MinIO ---
 const BUCKET = process.env.TEST_DATA_BUCKET;
 const ENDPOINT = process.env.INTAKE_ENDPOINT || 'http://localhost:9000';
 const REGION = process.env.INTAKE_REGION || 'us-east-1';
 const ALIAS = process.env.INTAKE_MC_ALIAS || 'myminio';
 
-test('multipart réel (3 parts) accepté par MinIO', { skip: !BUCKET }, async () => {
+test('real multipart (3 parts) accepted by MinIO', { skip: !BUCKET }, async () => {
   const key = 'multipart/big.bin';
-  const size = 20 * 1024 * 1024; // 20 MiB → 3 parts @ 8 MiB
+  const size = 20 * 1024 * 1024; // 20 MiB -> 3 parts @ 8 MiB
   const body = new Uint8Array(size);
   for (let i = 0; i < size; i++) body[i] = i & 0xff;
 
@@ -54,10 +54,10 @@ test('multipart réel (3 parts) accepté par MinIO', { skip: !BUCKET }, async ()
       last = p.uploaded;
     },
   });
-  assert.ok(r.parts.length >= 3, `attendu >=3 parts, obtenu ${r.parts.length}`);
+  assert.ok(r.parts.length >= 3, `expected >=3 parts, got ${r.parts.length}`);
   assert.strictEqual(last, size);
 
-  // Vérifier la taille côté serveur via mc (admin).
+  // Verify the server-side size via mc (admin).
   const out = execFileSync('mc', ['--json', 'stat', `${ALIAS}/${BUCKET}/${key}`]).toString();
   const stat = JSON.parse(out.trim().split('\n')[0]);
   assert.strictEqual(Number(stat.size), size);

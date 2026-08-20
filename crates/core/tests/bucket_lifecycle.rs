@@ -11,14 +11,14 @@ async fn create_versioned_bucket_then_delete_purges_versions() {
     let dp = dp(&cfg);
     let bucket = "intake-test-lifecycle-0001";
 
-    // nettoyage préventif si un run précédent a échoué
+    // preemptive cleanup in case a previous run failed
     let _ = dp.delete_bucket(bucket).await;
 
     dp.create_bucket(bucket).await.expect("create_bucket");
     dp.enable_versioning(bucket).await.expect("enable_versioning");
     dp.set_cors(bucket, "*").await.expect("set_cors");
 
-    // écrire deux versions du même objet
+    // write two versions of the same object
     for body in ["v1", "v2"] {
         dp.client
             .put_object()
@@ -30,7 +30,7 @@ async fn create_versioned_bucket_then_delete_purges_versions() {
             .expect("put_object");
     }
 
-    // versioning actif => au moins deux versions listées
+    // versioning on => at least two versions listed
     let versions = dp
         .client
         .list_object_versions()
@@ -38,10 +38,10 @@ async fn create_versioned_bucket_then_delete_purges_versions() {
         .send()
         .await
         .expect("list_object_versions");
-    assert!(versions.versions().len() >= 2, "versioning inactif ?");
+    assert!(versions.versions().len() >= 2, "versioning inactive?");
 
-    // delete_bucket doit purger versions + supprimer le bucket
+    // delete_bucket must purge versions + delete the bucket
     dp.delete_bucket(bucket).await.expect("delete_bucket");
     let head = dp.client.head_bucket().bucket(bucket).send().await;
-    assert!(head.is_err(), "le bucket existe encore après delete_bucket");
+    assert!(head.is_err(), "bucket still exists after delete_bucket");
 }

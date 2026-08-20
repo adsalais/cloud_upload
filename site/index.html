@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dépôt de fichiers sécurisé</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; }
+    input { display: block; width: 100%; margin: .4rem 0; padding: .5rem; box-sizing: border-box; }
+    #drop { border: 2px dashed #999; border-radius: 8px; padding: 2rem; text-align: center; color: #666; margin: 1rem 0; }
+    #drop.over { border-color: #333; color: #333; }
+    progress { width: 100%; height: 1.2rem; }
+    #status { margin-top: 1rem; font-weight: 600; }
+    .err { color: #b00; }
+  </style>
+</head>
+<body>
+  <h1>Dépôt de fichiers</h1>
+  <p>Renseignez les identifiants fournis, puis déposez votre fichier.</p>
+  <input id="ak" placeholder="Access key" autocomplete="off" />
+  <input id="sk" placeholder="Secret key" type="password" autocomplete="off" />
+  <input id="st" placeholder="Session token (laisser vide si non fourni)" autocomplete="off" />
+  <input type="file" id="file" />
+  <div id="drop">Ou glissez un fichier ici</div>
+  <progress id="bar" value="0" max="100"></progress>
+  <div id="status"></div>
+
+  <script type="module">
+    import { multipartUpload } from './upload.js';
+
+    const $ = (id) => document.getElementById(id);
+    let config = null;
+    fetch('./config.json')
+      .then((r) => r.json())
+      .then((c) => { config = c; })
+      .catch(() => { $('status').innerHTML = '<span class="err">config.json introuvable</span>'; });
+
+    // Pré-remplissage via le fragment d'URL (#ak=...&sk=...&st=...)
+    const frag = new URLSearchParams(location.hash.slice(1));
+    for (const k of ['ak', 'sk', 'st']) if (frag.get(k)) $(k).value = frag.get(k);
+
+    async function start(file) {
+      if (!file) return;
+      if (!config) { $('status').innerHTML = '<span class="err">config non chargée</span>'; return; }
+      const creds = {
+        accessKey: $('ak').value.trim(),
+        secretKey: $('sk').value.trim(),
+        sessionToken: $('st').value.trim() || undefined,
+      };
+      if (!creds.accessKey || !creds.secretKey) {
+        $('status').innerHTML = '<span class="err">identifiants manquants</span>';
+        return;
+      }
+      const key = `data/${Date.now()}-${file.name}`;
+      $('status').textContent = 'Envoi en cours…';
+      try {
+        await multipartUpload({
+          endpoint: config.endpoint,
+          region: config.region,
+          bucket: config.dataBucket,
+          key,
+          body: file,
+          creds,
+          onProgress: (p) => { $('bar').value = Math.round((100 * p.uploaded) / p.total); },
+        });
+        $('status').textContent = 'Terminé ✔ — merci, vous pouvez fermer cette page.';
+      } catch (e) {
+        $('status').innerHTML = `<span class="err">Échec : ${e.message}</span>`;
+      }
+    }
+
+    $('file').addEventListener('change', (e) => start(e.target.files[0]));
+    const drop = $('drop');
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+    drop.addEventListener('drop', (e) => {
+      e.preventDefault();
+      drop.classList.remove('over');
+      start(e.dataTransfer.files[0]);
+    });
+  </script>
+</body>
+</html>

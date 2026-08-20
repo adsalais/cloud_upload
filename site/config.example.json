@@ -1,0 +1,6 @@
+{
+  "endpoint": "http://localhost:9000",
+  "region": "us-east-1",
+  "dataBucket": "intake-data-acme-2026-abcd",
+  "usePathStyle": true
+}
